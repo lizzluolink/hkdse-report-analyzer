@@ -4,9 +4,8 @@ import streamlit as st
 from pdf_utils import extract_item_analysis
 
 st.set_page_config(page_title="Item Analysis", page_icon="📌", layout="wide")
-st.title("📌 自定義項目分析 app")
-st.caption("此頁會讀取主 app 已處理好的資料。請先回主 app 上載 PDF，並按『處理檔案並啟用自定義分析 app』。")
-
+st.title("📌 自訂項目分析 | Custom Item Analysis")
+st.caption("此頁會讀取主頁已處理好的資料。| This page reads the processed data from the main page.")
 if "item_custom_cols" not in st.session_state:
     st.session_state.item_custom_cols = []
 if "item_col_options_history" not in st.session_state:
@@ -30,7 +29,7 @@ if "item_exp_inter" not in st.session_state:
 if "item_exp_low" not in st.session_state:
     st.session_state.item_exp_low = 40
 
-st.page_link("app.py", label="⬅️ 返回主 app", icon="⬅️")
+st.page_link("app.py", label="返回主頁 | Back to Main Page", icon="⬅️")
 
 if "processed_item_df" not in st.session_state or st.session_state.processed_item_df is None:
     source_pdf_bytes = st.session_state.get("source_pdf_bytes")
@@ -38,16 +37,16 @@ if "processed_item_df" not in st.session_state or st.session_state.processed_ite
         st.session_state.processed_item_df = extract_item_analysis(source_pdf_bytes)
 
 if "processed_item_df" not in st.session_state or st.session_state.processed_item_df is None:
-    st.warning("尚未找到已處理好的項目分析資料。請先回主 app 完成前處理。")
+    st.warning("未找到項目分析資料，請回到主頁完成上載。| No item analysis data found yet. Please upload your report in the main page.")
     st.stop()
 
 df_item_c = st.session_state.processed_item_df.copy()
 source_name = st.session_state.get("source_pdf_name", "未命名檔案")
-st.success(f"已載入主 app 處理完成的資料：{source_name}")
+st.success(f"已載入主頁資料：{source_name}")
 
 if not df_item_c.empty:
-    if "初始序列" not in df_item_c.columns:
-        df_item_c.insert(0, "初始序列", range(1, len(df_item_c) + 1))
+    if "row_index" not in df_item_c.columns:
+        df_item_c.insert(0, "row_index", range(1, len(df_item_c) + 1))
     if "題號" not in df_item_c.columns:
         df_item_c.insert(1, "題號", df_item_c.get("Item", range(1, len(df_item_c) + 1)))
 
@@ -55,23 +54,23 @@ if not df_item_c.empty:
     step1_col, step2_col = st.columns([1, 1])
 
     with step1_col:
-        st.info("Step 1：建立自定義欄位 (最多 6 個)")
+        st.info("1️⃣ 建立自訂欄位 (最多 6 個) | Create Custom Fields (Maximum 6)")
         with st.form("item_add_field_form", clear_on_submit=True):
-            new_col = st.text_input("輸入新自定義欄位名稱：", key="new_col_input_item")
-            submitted = st.form_submit_button("➕ 新增欄位")
+            new_col = st.text_input("輸入新自訂欄位名稱 | Enter New Custom Field Name", key="new_col_input_item")
+            submitted = st.form_submit_button("➕ 新增欄位 | Add Field")
             if submitted:
                 if new_col and new_col not in st.session_state.item_custom_cols and len(st.session_state.item_custom_cols) < 6:
                     st.session_state.item_custom_cols.append(new_col)
                     st.session_state.item_col_options_history[new_col] = []
 
         if st.session_state.item_custom_cols:
-            st.success(f"目前建立的欄位：{', '.join(st.session_state.item_custom_cols)}")
+            st.success(f"已建立欄位 | Created Fields: {', '.join(st.session_state.item_custom_cols)}")
 
     with step2_col:
-        st.info("Step 2：為每一題設定分類 (下拉聯想與新增)")
-        question_options = [f"{row['題號']} [{row['初始序列']}]" for _, row in df_item_c.iterrows()]
-        seq_map = {f"{row['題號']} [{row['初始序列']}]": row['初始序列'] for _, row in df_item_c.iterrows()}
-        sel_qs_display = st.multiselect("選擇要輸入標籤的題號：", question_options, default=question_options[:1], key="item_q_sel")
+        st.info("2️⃣ 為各題設定分類 | Set Categories for Each Question")
+        question_options = [f"{row['題號']} [{row['row_index']}]" for _, row in df_item_c.iterrows()]
+        seq_map = {f"{row['題號']} [{row['row_index']}]": row['row_index'] for _, row in df_item_c.iterrows()}
+        sel_qs_display = st.multiselect("選擇輸入類別的題號 | Select Questions to Add Categorie(s)", question_options, default=question_options[:1], key="item_q_sel")
         sel_qs = [seq_map[q] for q in sel_qs_display]
 
         if st.session_state.item_clear_inputs:
@@ -84,20 +83,20 @@ if not df_item_c.empty:
 
         if sel_qs_display:
             selected_display = ", ".join(sel_qs_display)
-            st.write(f"**正在編輯：{selected_display}**")
+            st.write(f"**正在編輯 | Editing: {selected_display}**")
             all_values = [st.session_state.item_custom_values.get(idx, {}) for idx in sel_qs]
             current_values = {}
             for col in st.session_state.item_custom_cols:
                 values_for_col = {v.get(col, "") for v in all_values}
                 current_values[col] = values_for_col.pop() if len(values_for_col) == 1 else ""
         else:
-            st.warning("請先選擇至少一題。")
+            st.warning("請先選擇至少一題。| Please select at least one question first.")
             current_values = {}
 
         input_results = {}
         for col in st.session_state.item_custom_cols:
             history_opts = st.session_state.item_col_options_history.get(col, [])
-            options = [""] + history_opts + ["輸入新文本"]
+            options = [""] + history_opts + ["➕ 輸入新類別 | Enter a new category"]
             default_idx = 0
             curr_val = current_values.get(col, "")
             if curr_val in options:
@@ -107,18 +106,18 @@ if not df_item_c.empty:
                 sel_key = f"sel_item_{col}"
                 sel_val = st.selectbox(f"{col}:", options=options, index=default_idx, key=sel_key)
             with new_col:
-                if sel_val == "輸入新文本":
+                if sel_val == "➕ 輸入新類別 | Enter a new category":
                     new_key = f"new_val_item_{col}"
                     if new_key not in st.session_state:
                         st.session_state[new_key] = ""
-                    new_val = st.text_input(f"請輸入新的「{col}」:", key=new_key)
+                    new_val = st.text_input(f"請輸入新的 「{col}」 | Enter new  {col}:", key=new_key)
                     input_results[col] = new_val
                 else:
                     input_results[col] = sel_val
 
         submit_col, note_col = st.columns([1, 1])
         with submit_col:
-            submit_btn = st.button("📥 儲存設定", key=f"item_save_btn_{'_'.join(str(x) for x in sel_qs)}")
+            submit_btn = st.button("📥 儲存設定 | Save Settings", key=f"item_save_btn_{'_'.join(str(x) for x in sel_qs)}")
         save_note = note_col.empty()
         if st.session_state.item_save_note:
             save_note.caption(st.session_state.item_save_note)
@@ -133,52 +132,56 @@ if not df_item_c.empty:
                         if val not in st.session_state.item_col_options_history[col]:
                             st.session_state.item_col_options_history[col].append(val)
             st.session_state["item_last_saved_q"] = sel_qs
-            st.session_state["item_save_note"] = f"已為 {selected_display} 設定分類"
+            st.session_state["item_save_note"] = f"已為以下題目設定分類 | Defined categories for questions: {selected_display}"
             st.session_state.item_clear_inputs = True
             st.rerun()
 
     st.markdown("---")
-    st.info("Step 3：自訂分析重點（左右並排顯示）")
+    st.info("3️⃣ 校本自訂分析 | School-based Customize Analysis")
 
     col_attainment, col_expectation = st.columns(2)
 
     with col_attainment:
-        st.subheader("1️⃣ 科本得分率分類")
-        st.write("根據全港日校考生的平均得分率，將題目分為三個等級。")
+        st.subheader("① 定義「平均得分率」的分類 | Define Level of Attainment")
+        st.caption("此模組用於根據全港日校考生的平均得分率，將題目分為「高得分率（High attainment）」、「中等得分率（Intermediate attainment）」、「低得分率（Low attainment）」三個類別，亦即把學生在每題的表現分為「良好（Good）」、「中等（Intermediate）」及「未如理想（Poor）」。在設定上述三個類別的分界值時，可參考香港考試及評核局於該年發布的HKDSE評核資訊及分析資料1，或按該學科的情況作專業判斷。")
         col_cut1, col_cut2 = st.columns(2)
         with col_cut1:
             st.session_state.item_cutoff_high = st.number_input(
-                "高得分率分界值（%）：",
+                "高／中得分率分界值（%）| High/Intermediate attainment Cutoff:",
                 min_value=0, max_value=100, value=st.session_state.item_cutoff_high, step=1,
-                key="item_cutoff_high_input", help="高於此值為「High attainment」"
+                key="item_cutoff_high_input", help="日校得分率高於此值，即視為「高得分率」 | Day school Mean % above this value are classified as 'High attainment'."
             )
         with col_cut2:
             st.session_state.item_cutoff_low = st.number_input(
-                "低得分率分界值（%）：",
+                "中／低得分率分界值（%）| Intermediate/Low attainment Cutoff:",
                 min_value=0, max_value=100, value=st.session_state.item_cutoff_low, step=1,
-                key="item_cutoff_low_input", help="低於此值為「Low attainment」，介乎之間為「Intermediate attainment」"
+                key="item_cutoff_low_input", help="日校得分率低於此值，即視為「低得分率」 | Day school Mean % below this value are classified as 'Low attainment'."
             )
-        st.caption(f"分類設定：高≥{st.session_state.item_cutoff_high}% | 中{st.session_state.item_cutoff_low}%-{st.session_state.item_cutoff_high}% | 低≤{st.session_state.item_cutoff_low}%")
+        st.markdown(f"""
+                   題目得分率設定：高得分率 ≥{st.session_state.item_cutoff_high}% | 中得分率 {st.session_state.item_cutoff_low}%-{st.session_state.item_cutoff_high}% | 低得分率 ≤{st.session_state.item_cutoff_low}%
+                   
+                   Question Attainment Levels: High attainment ≥{st.session_state.item_cutoff_high}% | Intermediate attainment {st.session_state.item_cutoff_low}% - {st.session_state.item_cutoff_high}% | Low attainment ≤{st.session_state.item_cutoff_low}%
+                   """)
 
     with col_expectation:
-        st.subheader("2️⃣ 校本預期平均得分率")
-        st.write("設定本校學生在各類題目的預期得分率，用以判斷是否達到校本預期水平。")
+        st.subheader("② 校本預期平均得分率 | Define School-based Expected Attainment")
+        st.caption("在設定「全港日校考生的平均得分率」的類別後，此模組讓學校按校本情況進一步設定學生在高、中、低得分率題目的「校本預期平均得分率」，例如是與全港水平一致、較高或較低，以協助分析該校學生在各題中的表現是否達到校本的預期水平。（此「預期平均得分率」即校本的「底線」，當學生在某題的表現低於這條底線時，便代表需要注意及跟進）。")
         col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
             st.session_state.item_exp_high = st.number_input(
-                "High attainment 題目的預期（%）：",
+                "預期高得分率題目得分率（%）| Expected for High attainment questions:",
                 min_value=0, max_value=100, value=st.session_state.item_exp_high, step=1,
                 key="item_exp_high_input"
             )
         with col_exp2:
             st.session_state.item_exp_inter = st.number_input(
-                "Intermediate attainment 題目的預期（%）：",
+                "預期中等得分率題目得分率（%）| Expected for Intermediate attainment questions:",
                 min_value=0, max_value=100, value=st.session_state.item_exp_inter, step=1,
                 key="item_exp_inter_input"
             )
         with col_exp3:
             st.session_state.item_exp_low = st.number_input(
-                "Low attainment 題目的預期（%）：",
+                "預期低得分率題目得分率（%）| Expected for Low attainment questions:",
                 min_value=0, max_value=100, value=st.session_state.item_exp_low, step=1,
                 key="item_exp_low_input"
             )
@@ -187,7 +190,7 @@ if not df_item_c.empty:
 
     df_display = df_item_c.copy()
     for col in st.session_state.item_custom_cols:
-        df_display[col] = df_display["初始序列"].apply(lambda x: st.session_state.item_custom_values.get(x, {}).get(col, ""))
+        df_display[col] = df_display["row_index"].apply(lambda x: st.session_state.item_custom_values.get(x, {}).get(col, ""))
 
     # 計算 Day School Attainment
     def get_attainment(rate):
@@ -214,7 +217,7 @@ if not df_item_c.empty:
         else:  # Low attainment
             expected = st.session_state.item_exp_low
 
-        return "Attained ✓" if your_rate_pct >= expected else "Below Expectation ✗"
+        return "Attained" if your_rate_pct >= expected else "Below Expectation"
 
     df_display["School-based Expected Attainment"] = df_display.apply(get_expected_status, axis=1)
 
@@ -231,7 +234,7 @@ if not df_item_c.empty:
             return "background-color: #fff3b3; color: #8b0000; font-style: italic"
         return ""
 
-    st.write("📊 **總覽表 (自動更新)：**")
+    st.write("📊 **總覽表 (本表跟隨以上設定自動更新) | Overview Table (This table updates automatically based on the above settings)**")
     st.dataframe(
         df_display.style
             .format({
@@ -253,28 +256,28 @@ if not df_item_c.empty:
     )
 
     st.markdown("---")
-    st.info("Step 4：篩選與排序結果")
+    st.info("4️⃣ 篩選與排序分析 | Filter and Sort Analysis")
 
     f_cols = st.columns(max(len(st.session_state.item_custom_cols) + 2, 2))
     active_filters = {}
     for i, col in enumerate(st.session_state.item_custom_cols):
         with f_cols[i]:
             u_vals = [x for x in df_display[col].unique() if str(x).strip()]
-            active_filters[col] = st.multiselect(f"篩選 {col}", u_vals, key=f"filter_item_{col}")
+            active_filters[col] = st.multiselect(f"{col}", u_vals, key=f"filter_item_{col}")
     
     with f_cols[len(st.session_state.item_custom_cols)]:
         attainment_vals = [x for x in df_display["Day School Attainment"].unique() if str(x).strip()]
-        active_filters["Day School Attainment"] = st.multiselect("篩選 Day School Attainment", attainment_vals, key="filter_item_attainment")
+        active_filters["Day School Attainment"] = st.multiselect("Day School Attainment", attainment_vals, key="filter_item_attainment")
     
     with f_cols[len(st.session_state.item_custom_cols) + 1]:
         expected_vals = [x for x in df_display["School-based Expected Attainment"].unique() if str(x).strip()]
-        active_filters["School-based Expected Attainment"] = st.multiselect("篩選 School-based Expected Attainment", expected_vals, key="filter_item_expected")
+        active_filters["School-based Expected Attainment"] = st.multiselect("School-based Expected Attainment", expected_vals, key="filter_item_expected")
 
     c4, c5 = st.columns([2, 1])
     with c4:
-        sort_by = st.selectbox("排序依據", ["預設（按題號）", "Your school Mean %", "Day schools Mean %", "Day School Attainment", "School-based Expected Attainment"], key="sort_item")
+        sort_by = st.selectbox("排序", ["按題號 | by Question Number", "Your school Mean %", "Day schools Mean %", "Day School Attainment", "School-based Expected Attainment"], key="sort_item")
     with c5:
-        sort_order = st.radio("排序方式", ["由高至低", "由低至高"], horizontal=True, key="order_item")
+        sort_order = st.radio("排序方式", ["由高至低 | Highest to Lowest", "由低至高 | Lowest to Highest"], horizontal=True, key="order_item")
 
     final_df = df_display.copy()
     for col, s_filters in active_filters.items():
@@ -308,6 +311,6 @@ if not df_item_c.empty:
         use_container_width=True, hide_index=True
     )
 else:
-    st.error("找不到可用的項目分析資料。")
+    st.error("找不到可用的項目分析資料。 | No item analysis data available.")
 
 st.markdown("---")
