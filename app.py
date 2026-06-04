@@ -21,7 +21,7 @@ st.markdown(
     """
 本工具將提取考評局 PDF 報告中的數據，並提供題目標記與分析功能。
 
-This tool automatically extracts data from the HKDSE PDF reports and provides question tagging and analysis features.
+This tool extracts data from the HKDSE PDF reports and provides question tagging and analysis features.
 """
 )
 # ==========================================
