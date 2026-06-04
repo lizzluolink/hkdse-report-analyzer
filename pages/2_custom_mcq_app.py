@@ -531,8 +531,6 @@ if not df_mcq_c.empty:
             .apply(style_mcq_row, axis=1),
         use_container_width=True, hide_index=True
     )
-
-    st.info("4️⃣ Step 4 匯出篩選結果 | Step 4 Export Filtered Results")
     
     # Build dynamic PDF title with filter and sort info
     filter_info_mcq = []
@@ -548,7 +546,7 @@ if not df_mcq_c.empty:
     step4_pdf_col, step4_excel_col = st.columns(2)
     with step4_pdf_col:
         st.download_button(
-            label="📄 下載 Step 4 PDF 篩選表 | Download Step 4 Filtered PDF",
+            label="📄 下載 PDF 篩選表 | Download Filtered PDF",
             data=filtered_export_pdf,
             file_name=f"{source_name.replace('.pdf', '')}_MCQFiltered.pdf",
             mime="application/pdf",
@@ -556,7 +554,7 @@ if not df_mcq_c.empty:
         )
     with step4_excel_col:
         st.download_button(
-            label="📥 下載 Step 4 Excel 篩選表 | Download Step 4 Filtered Excel",
+            label="📥 下載 Excel 篩選表 | Download Filtered Excel",
             data=filtered_export_excel,
             file_name=f"{source_name.replace('.pdf', '')}_MCQFiltered.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

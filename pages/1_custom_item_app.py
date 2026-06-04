@@ -313,14 +313,13 @@ if not df_item_c.empty:
         use_container_width=True, hide_index=True
     )
 
-    st.info("3️⃣ Step 3 總覽表下載 | Step 3 Overview Export")
     overview_export_df = build_item_export_df(df_display, for_excel=True)
     overview_export_pdf = convert_df_to_pdf(build_item_export_df(df_display, for_excel=False), build_item_style_map(df_display), title="項目分析 | 總覽表 Item Analysis | Overview Table")
     overview_export_excel = convert_df_to_styled_excel(overview_export_df, build_item_style_map(df_display), sheet_name="Item Overview")
     step3_pdf_col, step3_excel_col = st.columns(2)
     with step3_pdf_col:
         st.download_button(
-            label="📄 下載 Step 3 PDF 總覽表 | Download Step 3 Overview PDF",
+            label="📄 下載 PDF 總覽表 | Download Overview PDF",
             data=overview_export_pdf,
             file_name=f"{source_name.replace('.pdf', '')}_ItemOverview.pdf",
             mime="application/pdf",
@@ -328,7 +327,7 @@ if not df_item_c.empty:
         )
     with step3_excel_col:
         st.download_button(
-            label="📥 下載 Step 3 Excel 總覽表 | Download Step 3 Overview Excel",
+            label="📥 下載 Excel 總覽表 | Download Overview Excel",
             data=overview_export_excel,
             file_name=f"{source_name.replace('.pdf', '')}_ItemOverview.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -427,7 +426,7 @@ if not df_item_c.empty:
     col_pdf, col_excel = st.columns(2)
     with col_pdf:
         st.download_button(
-            label="📄 下載 Step 4 PDF 篩選表 | Download Step 4 Filtered PDF",
+            label="📄 下載 PDF 篩選表 | Download Filtered PDF",
             data=pdf_bytes,
             file_name=f"{source_name.replace('.pdf', '')}_ItemFiltered.pdf",
             mime="application/pdf",
@@ -435,7 +434,7 @@ if not df_item_c.empty:
         )
     with col_excel:
         st.download_button(
-            label="📥 下載 Step 4 Excel 篩選表 | Download Step 4 Filtered Excel",
+            label="📥 下載 Excel 篩選表 | Download Filtered Excel",
             data=excel_bytes,
             file_name=f"{source_name.replace('.pdf', '')}_ItemFiltered.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
