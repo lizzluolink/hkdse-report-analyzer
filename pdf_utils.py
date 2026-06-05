@@ -1,5 +1,7 @@
 import io
 import re
+import os
+import urllib.request
 
 import altair as alt
 import pandas as pd
@@ -16,13 +18,73 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# Register DejaVuSans font for better Unicode support (including fallback for Chinese characters)
-try:
-    pdfmetrics.registerFont(TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
-    pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
-    DEFAULT_FONT = 'DejaVuSans'
-except:
-    DEFAULT_FONT = 'Helvetica'
+# Register a Unicode CJK-capable font for Chinese glyphs.
+def _register_font(path, name):
+    try:
+        pdfmetrics.registerFont(TTFont(name, path))
+        return True
+    except Exception:
+        return False
+
+# Try to find common CJK fonts on the system
+DEFAULT_FONT = None
+DEFAULT_BOLD_FONT = None
+DEFAULT_ITALIC_FONT = None
+
+system_candidates = [
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.otf',
+    '/usr/share/fonts/truetype/NotoSansCJKtc-Regular.otf',
+    '/usr/share/fonts/truetype/NotoSansCJKsc-Regular.otf',
+    '/usr/share/fonts/truetype/arphic/ukai.ttc',
+    '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+]
+
+found = None
+for p in system_candidates:
+    if os.path.exists(p):
+        low = p.lower()
+        # accept only likely CJK-capable fonts (avoid Dejavu which lacks Chinese glyphs)
+        if any(k in low for k in ('noto', 'cjk', 'wqy', 'arphic', 'sourcehan', 'ukai', 'unifont')):
+            found = p
+            break
+
+if found:
+    # prefer a clear name for registration
+    base_name = 'CustomCJK'
+    if _register_font(found, base_name):
+        DEFAULT_FONT = base_name
+        DEFAULT_BOLD_FONT = base_name
+        DEFAULT_ITALIC_FONT = base_name
+
+# Fallback: try to download a Noto Sans CJK subset (from GitHub raw) into workspace
+if not DEFAULT_FONT:
+    try:
+        noto_url = 'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf'
+        target = '/tmp/NotoSansSC-Regular.otf'
+        if not os.path.exists(target):
+            urllib.request.urlretrieve(noto_url, target)
+        if _register_font(target, 'NotoSansSC'):
+            DEFAULT_FONT = 'NotoSansSC'
+            DEFAULT_BOLD_FONT = 'NotoSansSC'
+            DEFAULT_ITALIC_FONT = 'NotoSansSC'
+    except Exception:
+        DEFAULT_FONT = None
+
+# Final fallback to DejaVuSans or Helvetica
+if not DEFAULT_FONT:
+    try:
+        pdfmetrics.registerFont(TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        DEFAULT_FONT = 'DejaVuSans'
+        DEFAULT_BOLD_FONT = 'DejaVuSans-Bold'
+        DEFAULT_ITALIC_FONT = 'DejaVuSans'
+    except Exception:
+        DEFAULT_FONT = 'Helvetica'
+        DEFAULT_BOLD_FONT = 'Helvetica-Bold'
+        DEFAULT_ITALIC_FONT = 'Helvetica'
 
 @st.cache_data
 def extract_item_analysis(file_bytes):
@@ -333,6 +395,7 @@ def convert_df_to_pdf(df, style_map=None, title="Overview Table"):
 
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table_style = [
+        ("FONTNAME", (0, 0), (-1, -1), DEFAULT_FONT),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#D3D3D3")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
@@ -349,9 +412,9 @@ def convert_df_to_pdf(df, style_map=None, title="Overview Table"):
             if style.get("font_color"):
                 table_style.append(("TEXTCOLOR", (table_col, table_row), (table_col, table_row), colors.HexColor(style["font_color"])))
             if style.get("bold"):
-                table_style.append(("FONTNAME", (table_col, table_row), (table_col, table_row), "Helvetica-Bold"))
+                table_style.append(("FONTNAME", (table_col, table_row), (table_col, table_row), DEFAULT_BOLD_FONT))
             if style.get("italic"):
-                table_style.append(("FONTNAME", (table_col, table_row), (table_col, table_row), "Helvetica-Oblique"))
+                table_style.append(("FONTNAME", (table_col, table_row), (table_col, table_row), DEFAULT_ITALIC_FONT))
     table.setStyle(TableStyle(table_style))
     story.append(table)
     doc.build(story)

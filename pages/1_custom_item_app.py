@@ -35,6 +35,9 @@ if "item_exp_inter" not in st.session_state:
     st.session_state.item_exp_inter = 60
 if "item_exp_low" not in st.session_state:
     st.session_state.item_exp_low = 40
+if "item_sort_levels" not in st.session_state:
+    # Each level is a dict: {"col": column_name, "order": "desc"/"asc"}
+    st.session_state.item_sort_levels = [{"col": "row_index", "order": "desc"}]
 
 st.page_link("app.py", label="返回主頁 | Main Page", icon="⬅️")
 
@@ -60,12 +63,15 @@ if not df_item_c.empty:
         df_item_c = df_item_c.drop(columns=["Item"])
 
     sel_q = None
-    step1_col, step2_col = st.columns([1, 1])
+
+    st.markdown("---")
+    st.info("🏷️ 1. 建立自訂欄位並為題目設定分類 Create Custom Fields and Set Categories for Questions")
+    step1_col, step2_col = st.columns([1, 1], border=True)
 
     with step1_col:
-        st.info("1️⃣ 建立自訂欄位 (最多 6 個) Create Custom Fields (Maximum 6)")
+        st.subheader("1.1 建立自訂欄位 (最多 6 個) Create Custom Fields (Maximum 6)")
         st.caption("自訂欄位可用於為每題設定不同的分類，例如「試卷」、「題型」、「難度」等，以協助後續的篩選和排序。")
-        with st.form("item_add_field_form", clear_on_submit=True):
+        with st.form("item_add_field_form", clear_on_submit=True, border=False):
             new_col = st.text_input("輸入新自訂欄位名稱 | Enter New Custom Field Name", key="new_col_input_item")
             submitted = st.form_submit_button("➕ 新增欄位 Add Field")
             if submitted:
@@ -79,7 +85,7 @@ if not df_item_c.empty:
             st.success(f"已建立欄位 | Created Fields: {', '.join(st.session_state.item_custom_cols)}")
 
     with step2_col:
-        st.info("2️⃣ 為題目設定分類 Set Categories for Each Question")
+        st.subheader("1.2 為題目設定分類 Set Categories for Questions")
         st.caption("在此模組為各題設定剛才建立的自訂欄位的分類，例如「試卷一」、「選擇題」、「高難度」等。")
         question_options = [f"{row['題號']} [{row['row_index']}]" for _, row in df_item_c.iterrows()]
         seq_map = {f"{row['題號']} [{row['row_index']}]": row['row_index'] for _, row in df_item_c.iterrows()}
@@ -150,12 +156,12 @@ if not df_item_c.empty:
             st.rerun()
 
     st.markdown("---")
-    st.info("3️⃣ 校本自訂分析 School-based Customize Analysis")
+    st.info("📍 2. 校本自訂分析 School-based Customize Analysis")
 
-    col_attainment, col_expectation = st.columns(2)
+    col_attainment, col_expectation = st.columns(2, border=True)
 
     with col_attainment:
-        st.subheader("① 定義「平均得分率」的分類 | Define Level of Attainment")
+        st.subheader("2.1 定義「平均得分率」的分類 | Define Level of Attainment")
         st.caption("此模組用於根據全港日校考生的平均得分率，將題目分為「高得分率（High attainment）」、「中等得分率（Intermediate attainment）」、「低得分率（Low attainment）」三個類別，亦即把學生在每題的表現分為「良好（Good）」、「中等（Intermediate）」及「未如理想（Poor）」。在設定上述三個類別的分界值時，可參考香港考試及評核局於該年發布的HKDSE評核資訊及分析，或按該學科的情況作專業判斷。")
         col_cut1, col_cut2 = st.columns(2)
         with col_cut1:
@@ -177,7 +183,7 @@ if not df_item_c.empty:
                    """)
 
     with col_expectation:
-        st.subheader("② 校本預期平均得分率 | Define School-based Expected Attainment")
+        st.subheader("2.2 校本預期平均得分率 | Define School-based Expected Attainment")
         st.caption("在設定「全港日校考生的平均得分率」的類別後，此模組讓學校按校本情況進一步設定學生在高、中、低得分率題目的「校本預期平均得分率」，例如是與全港水平一致、較高或較低，以協助分析該校學生在各題中的表現是否達到校本的預期水平。（此「預期平均得分率」即校本的「底線」，當學生在某題的表現低於這條底線時，便代表需要注意及跟進）。")
         col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
@@ -273,7 +279,9 @@ if not df_item_c.empty:
     def build_item_style_map(df):
         style_map = {}
         columns = list(df.columns)
-        for row_idx, row in df.iterrows():
+        
+        for pos, (_, row) in enumerate(df.iterrows()):
+            row_idx = pos
             if "Day School Attainment" in columns:
                 col_idx = columns.index("Day School Attainment")
                 attendance = row["Day School Attainment"]
@@ -324,6 +332,7 @@ if not df_item_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_ItemOverview.pdf",
             mime="application/pdf",
             use_container_width=True,
+            type="primary",
         )
     with step3_excel_col:
         st.download_button(
@@ -332,11 +341,12 @@ if not df_item_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_ItemOverview.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
+            type="primary",
         )
 
     st.markdown("---")
-    st.info("4️⃣ 篩選與排序分析 Filter and Sort Analysis")
-
+    st.info("↕️ 3. 篩選與排序分析 Filter and Sort Analysis")
+    st.subheader("3.1 篩選 Filter")
     f_cols = st.columns(max(len(st.session_state.item_custom_cols) + 2, 2))
     active_filters = {}
     for i, col in enumerate(st.session_state.item_custom_cols):
@@ -351,40 +361,83 @@ if not df_item_c.empty:
     with f_cols[len(st.session_state.item_custom_cols) + 1]:
         expected_vals = [x for x in df_display["School-based Expected Attainment"].unique() if str(x).strip()]
         active_filters["School-based Expected Attainment"] = st.multiselect("School-based Expected Attainment", expected_vals, key="filter_item_expected")
+    
+    st.subheader("3.2 排序 Sort")
 
-    c4, c5 = st.columns([2, 1])
-    with c4:
-            def _rerun_on_sort_change():
-                st.session_state["_item_sort_rerun_toggle"] = not st.session_state.get("_item_sort_rerun_toggle", False)
+    def _rerun_on_sort_change():
+        st.session_state["_item_sort_rerun_toggle"] = not st.session_state.get("_item_sort_rerun_toggle", False)
 
-            sort_by = st.selectbox(
-                "排序",
-                ["row_index", "Your school Mean %", "Day schools Mean %", "Day School Attainment", "School-based Expected Attainment"],
-                key="sort_item",
-                on_change=_rerun_on_sort_change,
-            )
-    with c5:
-            sort_order = st.radio(
-                "排序方式",
-                ["由高至低 | Highest to Lowest", "由低至高 | Lowest to Highest"],
-                horizontal=True,
-                key="order_item",
-                on_change=_rerun_on_sort_change,
-                index=1,
-            )
+    # Available columns to sort by
+    sort_columns_opts = ["row_index", "Your school Mean %", "Day schools Mean %", "Day School Attainment", "School-based Expected Attainment"]
+
+    add_col, remove_col = st.columns([1, 2], gap="xxsmall")
+    with add_col:
+        if st.button("➕ 新增排序欄 Add Level", key="item_add_sort_level"):
+            if len(st.session_state.item_sort_levels) < 4:
+                st.session_state.item_sort_levels.append({"col": "row_index", "order": "desc"})
+                _rerun_on_sort_change()
+    with remove_col:
+        if st.button("➖ 移除排序欄 Remove Level", key="item_remove_sort_level"):
+            if len(st.session_state.item_sort_levels) > 1:
+                st.session_state.item_sort_levels.pop()
+                _rerun_on_sort_change()
+
+    # Render each sort level
+    for i, level in enumerate(st.session_state.item_sort_levels):
+        cols = st.columns([1, 1])
+        with cols[0]:
+            sel = st.selectbox(f"欄位 Field {i+1}", sort_columns_opts, index=sort_columns_opts.index(level.get("col") if level.get("col") in sort_columns_opts else "row_index"), key=f"item_sort_col_{i}", on_change=_rerun_on_sort_change)
+            st.session_state.item_sort_levels[i]["col"] = sel
+        with cols[1]:
+            order = st.radio("", ["由高至低 | Descending Order", "由低至高 | Ascending Order"], index=0 if level.get("order", "desc") == "desc" else 1, horizontal=True, key=f"item_sort_order_{i}", on_change=_rerun_on_sort_change)
+            st.session_state.item_sort_levels[i]["order"] = "desc" if "由高至低" in order else "asc"
 
     final_df = df_display.copy()
     for col, s_filters in active_filters.items():
         if s_filters:
             final_df = final_df[final_df[col].isin(s_filters)]
 
-    # Perform sorting: convert numeric columns when appropriate, and determine ascending by checking radio label
+    # Apply multi-level sorting based on session_state.item_sort_levels
     try:
-        if sort_by in ["row_index", "Your school Mean %", "Day schools Mean %"]:
-            final_df[sort_by] = pd.to_numeric(final_df[sort_by], errors='coerce')
-        ascending = ("由低至高" in sort_order)
-        if sort_by in final_df.columns:
-            final_df = final_df.sort_values(sort_by, ascending=ascending)
+        sort_by_list = []
+        ascending_list = []
+        temp_sort_cols = []
+        for idx, lvl in enumerate(st.session_state.item_sort_levels):
+            col = lvl.get("col")
+            order = lvl.get("order", "desc")
+            ascending = True if order == "asc" else False
+
+            # Custom handling for categorical ranks
+            if col == "Day School Attainment":
+                rank_map = {"High attainment": 3, "Intermediate attainment": 2, "Low attainment": 1}
+                temp_col = f"___item_sort_key_{idx}"
+                final_df[temp_col] = final_df[col].map(rank_map).fillna(0)
+                sort_by_list.append(temp_col)
+                temp_sort_cols.append(temp_col)
+                ascending_list.append(ascending)
+            elif col == "School-based Expected Attainment":
+                rank_map = {"Attained": 2, "Below Expectation": 1}
+                temp_col = f"___item_sort_key_{idx}"
+                final_df[temp_col] = final_df[col].map(rank_map).fillna(0)
+                sort_by_list.append(temp_col)
+                temp_sort_cols.append(temp_col)
+                ascending_list.append(ascending)
+            elif col in ["row_index", "Your school Mean %", "Day schools Mean %"]:
+                final_df[col] = pd.to_numeric(final_df[col], errors='coerce')
+                sort_by_list.append(col)
+                ascending_list.append(ascending)
+            else:
+                # fallback lexical ordering
+                sort_by_list.append(col)
+                ascending_list.append(ascending)
+
+        if sort_by_list:
+            # use stable sort
+            final_df = final_df.sort_values(by=sort_by_list, ascending=ascending_list, kind='mergesort')
+        # cleanup temp cols
+        for c in temp_sort_cols:
+            if c in final_df.columns:
+                final_df = final_df.drop(columns=[c])
     except Exception:
         pass
 
@@ -418,7 +471,10 @@ if not df_item_c.empty:
         if s_filters:
             filter_info.append(f"{col}: {', '.join(map(str, s_filters))}")
     filter_str = " | ".join(filter_info) if filter_info else "無篩選 | No filters"
-    pdf_title = f"項目分析 | Item Analysis | {filter_str} | Sort by {sort_by} {sort_order}"
+    # describe sort levels
+    sort_descs = [f"{lvl.get('col')} ({'asc' if lvl.get('order')=='asc' else 'desc'})" for lvl in st.session_state.item_sort_levels]
+    sort_str = " > ".join(sort_descs) if sort_descs else "row_index (desc)"
+    pdf_title = f"項目分析 | Item Analysis | {filter_str} | Sort: {sort_str}"
     
     pdf_bytes = convert_df_to_pdf(export_df_pdf, style_map, title=pdf_title)
     excel_bytes = convert_df_to_styled_excel(export_df_excel, style_map, sheet_name="Item Filtered")
@@ -431,6 +487,7 @@ if not df_item_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_ItemFiltered.pdf",
             mime="application/pdf",
             use_container_width=True,
+            type="primary",
         )
     with col_excel:
         st.download_button(
@@ -439,6 +496,7 @@ if not df_item_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_ItemFiltered.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
+            type="primary",
         )
 
 else:

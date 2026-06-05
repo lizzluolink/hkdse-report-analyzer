@@ -35,6 +35,8 @@ if "mcq_exp_inter" not in st.session_state:
     st.session_state.mcq_exp_inter = 60
 if "mcq_exp_low" not in st.session_state:
     st.session_state.mcq_exp_low = 40
+if "mcq_sort_levels" not in st.session_state:
+    st.session_state.mcq_sort_levels = [{"col": "row_index", "order": "desc"}]
 
 def prepare_mcq_analysis_for_custom(df):
     df = df.copy()
@@ -133,12 +135,15 @@ if not df_mcq_c.empty:
         df_mcq_c = df_mcq_c.drop(columns=["Question Number"])
 
     sel_q_mcq = None
-    step1_col, step2_col = st.columns([1, 1])
+
+    st.markdown("---")
+    st.info("🏷️ 1. 建立自訂欄位並為題目設定分類 Create Custom Fields and Set Categories for Questions")
+    step1_col, step2_col = st.columns([1, 1], border=True)
 
     with step1_col:
-        st.info("1️⃣ 建立自訂欄位 (最多 6 個) | Create Custom Fields (Maximum 6)")
+        st.subheader("1.1 建立自訂欄位 (最多 6 個) | Create Custom Fields (Maximum 6)")
         st.caption("自訂欄位可用於為每題設定不同的分類，例如「試卷」、「題型」、「難度」等，以協助後續的篩選和排序。")
-        with st.form("mcq_add_field_form", clear_on_submit=True):
+        with st.form("mcq_add_field_form", clear_on_submit=True, border=False):
             new_col = st.text_input("輸入新自訂欄位名稱 | Enter New Custom Field Name", key="new_col_input_mcq")
             submitted = st.form_submit_button("➕ 新增欄位 | Add Field")
             if submitted:
@@ -152,7 +157,7 @@ if not df_mcq_c.empty:
             st.success(f"已建立欄位 | Created Fields: {', '.join(st.session_state.mcq_custom_cols)}")
 
     with step2_col:
-        st.info("2️⃣ 為各題設定分類 | Set Categories for Each Question")
+        st.subheader("1.2 為各題設定分類 | Set Categories for Questions")
         st.caption("在此模組為各題設定剛才建立的自訂欄位的分類，例如「試卷一」、「選擇題」、「高難度」等。")
         question_options = [f"{row['題號']} [{row['row_index']}]" for _, row in df_mcq_c.iterrows()]
         seq_map = {f"{row['題號']} [{row['row_index']}]": row['row_index'] for _, row in df_mcq_c.iterrows()}
@@ -227,13 +232,13 @@ if not df_mcq_c.empty:
         df_mcq_display[col] = df_mcq_display["row_index"].apply(lambda x: st.session_state.mcq_custom_values.get(x, {}).get(col, ""))
 
     st.markdown("---")
-    st.info("3️⃣ 校本自訂分析 School-based Customize Analysis")
+    st.info("📍 2. 校本自訂分析 School-based Customize Analysis")
 
-    col_attainment, col_expectation = st.columns(2)
+    col_attainment, col_expectation = st.columns(2, border=True)
 
     with col_attainment:
-        st.subheader("① 定義「平均得分率」的分類 | Define Level of Attainment")
-        st.caption("此模組用於根據全港日校考生的平均得分率，將題目分為「高得分率（High attainment）」、「中等得分率（Intermediate attainment）」、「低得分率（Low attainment）」三個類別，亦即把學生在每題的表現分為「良好（Good）」、「中等（Intermediate）」及「未如理想（Poor）」。在設定上述三個類別的分界值時，可參考香港考試及評核局於該年發布的HKDSE評核資訊及分析資料1，或按該學科的情況作專業判斷。")
+        st.subheader("2.1 定義「平均得分率」的分類 | Define Level of Attainment")
+        st.caption("此模組用於根據全港日校考生的平均得分率，將題目分為「高得分率（High attainment）」、「中等得分率（Intermediate attainment）」、「低得分率（Low attainment）」三個類別，亦即把學生在每題的表現分為「良好（Good）」、「中等（Intermediate）」及「未如理想（Poor）」。在設定上述三個類別的分界值時，可參考香港考試及評核局於該年發布的HKDSE評核資訊及分析，或按該學科的情況作專業判斷。")
         col_cut1, col_cut2 = st.columns(2)
         with col_cut1:
             st.session_state.mcq_cutoff_high = st.number_input(
@@ -254,7 +259,7 @@ if not df_mcq_c.empty:
                    """)
 
     with col_expectation:
-        st.subheader("② 校本預期平均得分率 | School-based Expected Attainment")
+        st.subheader("2.2 校本預期平均得分率 | School-based Expected Attainment")
         st.caption("在設定「全港日校考生的平均得分率」的類別後，此模組讓學校按校本情況進一步設定學生在高、中、低得分率題目的「校本預期平均得分率」，例如是與全港水平一致、較高或較低，以協助分析該校學生在各題中的表現是否達到校本的預期水平。（此「預期平均得分率」即校本的「底線」，當學生在某題的表現低於這條底線時，便代表需要注意及跟進）。")
         col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
@@ -360,7 +365,9 @@ if not df_mcq_c.empty:
     def build_mcq_style_map(df):
         style_map = {}
         columns = list(df.columns)
-        for row_idx, row in df.iterrows():
+        # Use positional row indices (0-based) to remain consistent after filtering/sorting
+        for pos, (_, row) in enumerate(df.iterrows()):
+            row_idx = pos
             if "Corr. Ans" in columns:
                 col_idx = columns.index("Corr. Ans")
                 style_map[(row_idx, col_idx)] = {"fill": "#d4edda"}
@@ -436,6 +443,7 @@ if not df_mcq_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_MCQOverview.pdf",
             mime="application/pdf",
             use_container_width=True,
+            type="primary",
         )
     with col_excel:
         st.download_button(
@@ -444,11 +452,12 @@ if not df_mcq_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_MCQOverview.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
+            type="primary",
         )
 
     st.markdown("---")
-    st.info("4️⃣ 篩選與排序分析 | Filter and Sort Analysis")
-
+    st.info("↕️ 3. 篩選與排序分析 Filter and Sort Analysis")
+    st.subheader("3.1 篩選 Filter")
     f_cols_mcq = st.columns(max(len(st.session_state.mcq_custom_cols) + 2, 2))
     active_filters_mcq = {}
     for i, col in enumerate(st.session_state.mcq_custom_cols):
@@ -469,39 +478,76 @@ if not df_mcq_c.empty:
         if s_filters:
             final_mcq_df = final_mcq_df[final_mcq_df[col].isin(s_filters)]
 
-    c4_mcq, c5_mcq = st.columns([2, 1])
-    with c4_mcq:
-        def _rerun_on_sort_change_mcq():
-            st.session_state["_mcq_sort_rerun_toggle"] = not st.session_state.get("_mcq_sort_rerun_toggle", False)
+    st.subheader("3.2 排序 Sort")
 
-        sort_by_mcq = st.selectbox(
-            "排序",
-            [
-                "row_index",
-                "Your school Correct %",
-                "Day schools Correct %",
-                "Day School Attainment",
-                "School-based Expected Attainment",
-            ],
-            key="sort_mcq",
-            on_change=_rerun_on_sort_change_mcq,
-        )
-    with c5_mcq:
-        sort_order_mcq = st.radio(
-            "排序方式",
-            ["由高至低 | Highest to Lowest", "由低至高 | Lowest to Highest"],
-            horizontal=True,
-            key="order_mcq",
-            on_change=_rerun_on_sort_change_mcq,
-            index=1,
-        )
-    # Sorting: convert numeric columns when appropriate, and determine ascending by checking radio label
+    def _rerun_on_sort_change_mcq():
+        st.session_state["_mcq_sort_rerun_toggle"] = not st.session_state.get("_mcq_sort_rerun_toggle", False)
+
+    sort_columns_opts = [
+        "row_index",
+        "Your school Correct %",
+        "Day schools Correct %",
+        "Day School Attainment",
+        "School-based Expected Attainment",
+    ]
+
+    add_col, remove_col = st.columns([1, 2], gap="xxsmall")
+    with add_col:
+        if st.button("➕ 新增排序欄 Add Level", key="mcq_add_sort_level"):
+            if len(st.session_state.mcq_sort_levels) < 4:
+                st.session_state.mcq_sort_levels.append({"col": "row_index", "order": "desc"})
+                _rerun_on_sort_change_mcq()
+    with remove_col:
+        if st.button("➖ 移除排序欄 Remove Level", key="mcq_remove_sort_level"):
+            if len(st.session_state.mcq_sort_levels) > 1:
+                st.session_state.mcq_sort_levels.pop()
+                _rerun_on_sort_change_mcq()
+
+    for i, level in enumerate(st.session_state.mcq_sort_levels):
+        cols = st.columns([1, 1])
+        with cols[0]:
+            sel = st.selectbox(f"欄位 Field {i+1}", sort_columns_opts, index=sort_columns_opts.index(level.get("col") if level.get("col") in sort_columns_opts else "row_index"), key=f"mcq_sort_col_{i}", on_change=_rerun_on_sort_change_mcq)
+            st.session_state.mcq_sort_levels[i]["col"] = sel
+        with cols[1]:
+            order = st.radio("", ["由高至低 | Descending Order", "由低至高 | Ascending Order"], index=0 if level.get("order", "desc") == "desc" else 1, horizontal=True, key=f"mcq_sort_order_{i}", on_change=_rerun_on_sort_change_mcq)
+            st.session_state.mcq_sort_levels[i]["order"] = "desc" if "由高至低" in order else "asc"
+    # Apply multi-level sorting based on session_state.mcq_sort_levels
     try:
-        if sort_by_mcq in ["row_index", "Your school Correct %", "Day schools Correct %"]:
-            final_mcq_df[sort_by_mcq] = pd.to_numeric(final_mcq_df[sort_by_mcq], errors='coerce')
-        ascending_mcq = ("由低至高" in sort_order_mcq)
-        if sort_by_mcq in final_mcq_df.columns:
-            final_mcq_df = final_mcq_df.sort_values(sort_by_mcq, ascending=ascending_mcq)
+        sort_by_list = []
+        ascending_list = []
+        temp_sort_cols = []
+        for idx, lvl in enumerate(st.session_state.mcq_sort_levels):
+            col = lvl.get("col")
+            order = lvl.get("order", "desc")
+            ascending = True if order == "asc" else False
+
+            if col == "Day School Attainment":
+                rank_map = {"High attainment": 3, "Intermediate attainment": 2, "Low attainment": 1}
+                temp_col = f"___mcq_sort_key_{idx}"
+                final_mcq_df[temp_col] = final_mcq_df[col].map(rank_map).fillna(0)
+                sort_by_list.append(temp_col)
+                temp_sort_cols.append(temp_col)
+                ascending_list.append(ascending)
+            elif col == "School-based Expected Attainment":
+                rank_map = {"Attained": 2, "Below Expectation": 1}
+                temp_col = f"___mcq_sort_key_{idx}"
+                final_mcq_df[temp_col] = final_mcq_df[col].map(rank_map).fillna(0)
+                sort_by_list.append(temp_col)
+                temp_sort_cols.append(temp_col)
+                ascending_list.append(ascending)
+            elif col in ["row_index", "Your school Correct %", "Day schools Correct %"]:
+                final_mcq_df[col] = pd.to_numeric(final_mcq_df[col], errors='coerce')
+                sort_by_list.append(col)
+                ascending_list.append(ascending)
+            else:
+                sort_by_list.append(col)
+                ascending_list.append(ascending)
+
+        if sort_by_list:
+            final_mcq_df = final_mcq_df.sort_values(by=sort_by_list, ascending=ascending_list, kind='mergesort')
+        for c in temp_sort_cols:
+            if c in final_mcq_df.columns:
+                final_mcq_df = final_mcq_df.drop(columns=[c])
     except Exception:
         pass
 
@@ -538,7 +584,10 @@ if not df_mcq_c.empty:
         if s_filters:
             filter_info_mcq.append(f"{col}: {', '.join(map(str, s_filters))}")
     filter_str_mcq = " | ".join(filter_info_mcq) if filter_info_mcq else "無篩選 | No filters"
-    pdf_title_mcq = f"多項選擇題分析 | MCQ Analysis | {filter_str_mcq} | Sort by {sort_by_mcq} {sort_order_mcq}"
+    # describe sort levels
+    sort_descs = [f"{lvl.get('col')} ({'asc' if lvl.get('order')=='asc' else 'desc'})" for lvl in st.session_state.mcq_sort_levels]
+    sort_str = " > ".join(sort_descs) if sort_descs else "row_index (desc)"
+    pdf_title_mcq = f"多項選擇題分析 | MCQ Analysis | {filter_str_mcq} | Sort: {sort_str}"
     
     filtered_export_df = build_mcq_export_df(final_mcq_df, for_excel=True)
     filtered_export_pdf = convert_df_to_pdf(build_mcq_export_df(final_mcq_df, for_excel=False), build_mcq_style_map(final_mcq_df), title=pdf_title_mcq)
@@ -551,6 +600,7 @@ if not df_mcq_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_MCQFiltered.pdf",
             mime="application/pdf",
             use_container_width=True,
+            type="primary",
         )
     with step4_excel_col:
         st.download_button(
@@ -559,6 +609,7 @@ if not df_mcq_c.empty:
             file_name=f"{source_name.replace('.pdf', '')}_MCQFiltered.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
+            type="primary",
         )
 else:
     st.error("找不到可用的項目分析資料。 | No MCQ analysis data available.")
