@@ -499,7 +499,7 @@ with tab3:
         "報告指示 | Report Instructions",
         value=st.session_state.get("custom_report_prompt", default_prompt),
         key="custom_report_prompt",
-        height=130,
+        height=500,
     )
 
     try:
@@ -544,7 +544,7 @@ with tab3:
         st.text_area(
             "中文報告內容 | Chinese Report Content",
             value=st.session_state.get("generated_report_zh", ""),
-            height=300,
+            height=500,
             key="generated_report_zh_display",
         )
         pdf_bytes = build_report_pdf(st.session_state.get("generated_report_zh", ""))
@@ -561,7 +561,7 @@ with tab3:
         st.text_area(
             "English Report Content",
             value=st.session_state.get("generated_report_en", ""),
-            height=300,
+            height=500,
             key="generated_report_en_display",
         )
         pdf_bytes = build_report_pdf(st.session_state.get("generated_report_en", ""))
