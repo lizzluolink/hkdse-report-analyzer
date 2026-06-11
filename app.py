@@ -493,7 +493,7 @@ with tab3:
 
     default_prompt = (
         "請根據以下總覽表撰寫清晰、專業的分析報告，重點指出整體表現、強弱項與值得關注的地方。\n"
-        "Write a clear and professional analytical report based on the overview tables, highlighting overall performance, strengths, weaknesses, and notable findings."
+        "Write a clear and professional analytical report based on the overview tables, highlighting overall performance, strengths, weaknesses, and notable findings."   
     )
     custom_report_prompt = st.text_area(
         "報告指示 | Report Instructions",
@@ -541,12 +541,7 @@ with tab3:
 
     if st.session_state.get("generated_report_zh"):
         st.subheader("📄 已生成中文報告 | Generated Chinese Report")
-        st.text_area(
-            "中文報告內容 | Chinese Report Content",
-            value=st.session_state.get("generated_report_zh", ""),
-            height=500,
-            key="generated_report_zh_display",
-        )
+        st.write(st.session_state.get("generated_report_zh", ""))
         pdf_bytes = build_report_pdf(st.session_state.get("generated_report_zh", ""))
         st.download_button(
             label="📥 下載中文報告 PDF | Download Chinese Report PDF",
@@ -558,12 +553,7 @@ with tab3:
 
     if st.session_state.get("generated_report_en"):
         st.subheader("📄 Generated English Report")
-        st.text_area(
-            "English Report Content",
-            value=st.session_state.get("generated_report_en", ""),
-            height=500,
-            key="generated_report_en_display",
-        )
+        st.write(st.session_state.get("generated_report_en", ""))
         pdf_bytes = build_report_pdf(st.session_state.get("generated_report_en", ""))
         st.download_button(
             label="📥 Download English Report PDF",
