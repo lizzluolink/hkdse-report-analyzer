@@ -402,6 +402,7 @@ if not df_mcq_c.empty:
         return style_map
 
     st.write("📊 **總覽表 (本表跟隨以上設定自動更新) | Overview Table (This table updates automatically based on the above settings)**")
+    st.session_state["custom_mcq_overview_df"] = df_mcq_display.copy()
     st.dataframe(
         df_mcq_display.style
             .format({

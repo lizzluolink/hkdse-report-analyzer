@@ -1,9 +1,13 @@
 import io
 import os
+import textwrap
 
 import altair as alt
+import groq
 import pandas as pd
 import streamlit as st
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 from pdf_utils import convert_df_to_excel, extract_item_analysis, extract_latest_dse_total_data, extract_mcq_analysis
 
@@ -63,6 +67,106 @@ def build_extraction_status_message():
         status("多項選擇題表格", "MCQ Analysis Table", isinstance(mcq_df, pd.DataFrame) and not mcq_df.empty),
     ]
 
+
+def dataframe_to_structured_text(df, label):
+    if df is None or df.empty:
+        return f"{label}: no data available."
+
+    df = df.copy()
+    df = df.fillna("").astype(str)
+    lines = [f"{label} overview:", f"Columns: {', '.join(df.columns.astype(str).tolist())}"]
+    sample_rows = df.head(10).to_dict(orient="records")
+    for index, row in enumerate(sample_rows, start=1):
+        row_text = "; ".join(f"{k}={v}" for k, v in row.items())
+        lines.append(f"Row {index}: {row_text}")
+    if len(df) > len(sample_rows):
+        lines.append(f"Only the first {len(sample_rows)} rows are shown out of {len(df)} total rows.")
+    return "\n".join(lines)
+
+
+def generate_groq_report(language, item_df, mcq_df, custom_prompt):
+    try:
+        api_key = st.secrets["GROQ_API_KEY"]
+    except Exception:
+        raise ValueError("Missing GROQ_API_KEY in st.secrets. Please add it to your Streamlit secrets.")
+
+    if not api_key:
+        raise ValueError("GROQ_API_KEY in st.secrets is empty. Please provide a valid key.")
+
+    system_instruction = (
+        "你是一位專業的學校數據分析報告撰寫者。請以繁體中文撰寫，保持清晰、結構化且避免虛構數字。"
+        if language == "zh"
+        else "You are a professional school data analyst and report writer. Please write clearly, in a structured school-report style, and avoid inventing numbers."
+    )
+
+    item_text = dataframe_to_structured_text(item_df, "Item Overview") if item_df is not None else "Item overview table is unavailable."
+    mcq_text = dataframe_to_structured_text(mcq_df, "MCQ Overview") if mcq_df is not None else "MCQ overview table is unavailable."
+
+    if item_df is not None and not item_df.empty and mcq_df is not None and not mcq_df.empty:
+        analysis_directive = (
+            "Please write one integrated report synthesizing findings from overlapping/common columns and discussing non-overlapping columns in separate sections. "
+            "Highlight where the two tables reinforce each other and where they provide distinct insights."
+        )
+    else:
+        analysis_directive = (
+            "Generate the report using only the available dataframe and explicitly state which part is unavailable or missing. "
+            "Do not hallucinate any missing numbers."
+        )
+
+    user_message = (
+        f"{custom_prompt.strip()}\n\n"
+        f"Language: {'Traditional Chinese' if language == 'zh' else 'English'}.\n\n"
+        f"{analysis_directive}\n\n"
+        f"Data available:\n"
+        f"{item_text}\n\n"
+        f"{mcq_text}\n\n"
+        "If the data is insufficient, state that clearly and avoid making up values."
+    )
+
+    client = groq.Client(api_key=api_key)
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": user_message},
+        ],
+        max_tokens=800,
+        temperature=0.3,
+    )
+
+    if not getattr(response, "choices", None):
+        raise ValueError("Groq returned an empty response.")
+
+    first_choice = response.choices[0]
+    report_text = getattr(getattr(first_choice, "message", None), "content", None)
+    if report_text is None:
+        raise ValueError("Groq did not return any report text.")
+    return report_text
+
+
+def build_report_pdf(report_text):
+    buffer = io.BytesIO()
+    pdf_canvas = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    pdf_canvas.setFont("Helvetica", 11)
+    y = height - 40
+    for paragraph in report_text.splitlines():
+        wrapped_lines = textwrap.wrap(paragraph, width=90)
+        if not wrapped_lines:
+            wrapped_lines = [""]
+        for line in wrapped_lines:
+            if y < 40:
+                pdf_canvas.showPage()
+                pdf_canvas.setFont("Helvetica", 11)
+                y = height - 40
+            pdf_canvas.drawString(40, y, line)
+            y -= 14
+    pdf_canvas.save()
+    pdf_data = buffer.getvalue()
+    buffer.close()
+    return pdf_data
+
+
 # ==========================================
 # 頂部：共用上傳區 / Top: Global Upload
 # ==========================================
@@ -88,9 +192,14 @@ if current_file is not None:
         for line in status_lines:
             st.success(line)
 
-# 建立主畫面三個標籤頁 (Tabs) 入口
+# 建立主畫面四個標籤頁 (Tabs) 入口
 # ==========================================
-tab0, tab1, tab2 = st.tabs(["📊 總數表格 Total Table", "📝 項目分析表格 Item Analysis Table", "✅ 多項選擇題表格 MCQ Analysis Table"])
+tab0, tab1, tab2, tab3 = st.tabs([
+    "📊 總數表格 Total Table",
+    "📝 項目分析表格 Item Analysis Table",
+    "✅ 多項選擇題表格 MCQ Analysis Table",
+    "🧠 LLM報告 Report Generator",
+])
 
 # -----------------
 # 標籤頁 0 的內容 / Tab 0 Content
@@ -347,3 +456,109 @@ with tab2:
                         )
                 except Exception as e:
                     st.error(f"❌ 發生錯誤 | Error processing file: {str(e)}")
+
+with tab3:
+    st.subheader("🧠 LLM報告生成器 | LLM Report Generator")
+    st.info(
+        "本標籤頁會從自訂項目分析及自訂多項選擇題分析分頁讀取總覽表，並使用 Groq 生成分析報告。"
+        "This tab reads overview tables from the custom item and MCQ pages through session state and generates reports using Groq."
+    )
+
+    item_df = st.session_state.get("custom_item_overview_df")
+    mcq_df = st.session_state.get("custom_mcq_overview_df")
+
+    if item_df is None and mcq_df is None:
+        st.warning(
+            "請先前往「項目分析」與「多項選擇題分析」分頁生成總覽表。"
+            " | Please first visit Item Analysis and MCQ Analysis pages to build overview tables."
+        )
+
+    if item_df is not None:
+        st.subheader("📌 項目分析總覽 Item Overview")
+        st.dataframe(item_df, use_container_width=True, hide_index=True)
+
+    if mcq_df is not None:
+        st.subheader("📌 多項選擇題總覽 MCQ Overview")
+        st.dataframe(mcq_df, use_container_width=True, hide_index=True)
+
+    default_prompt = (
+        "請根據以下總覽表撰寫清晰、專業的分析報告，重點指出整體表現、強弱項與值得關注的地方。\n"
+        "Write a clear and professional analytical report based on the overview tables, highlighting overall performance, strengths, weaknesses, and notable findings."
+    )
+    custom_report_prompt = st.text_area(
+        "報告指示 | Report Instructions",
+        value=st.session_state.get("custom_report_prompt", default_prompt),
+        key="custom_report_prompt",
+        height=130,
+    )
+
+    try:
+        api_key = st.secrets["GROQ_API_KEY"]
+    except Exception:
+        api_key = None
+
+    if not api_key:
+        st.error(
+            "缺少 Groq API 金鑰。請在 Streamlit secrets 中新增 GROQ_API_KEY。"
+        )
+
+    col_zh, col_en = st.columns(2)
+    gen_zh = False
+    gen_en = False
+    with col_zh:
+        gen_zh = st.button("生成中文報告", type="primary", use_container_width=True)
+    with col_en:
+        gen_en = st.button("Generate English Report", type="primary", use_container_width=True)
+
+    if (gen_zh or gen_en) and not api_key:
+        st.warning("無法生成報告，因為缺少 GROQ_API_KEY。| Cannot generate report because GROQ_API_KEY is missing.")
+
+    if gen_zh or gen_en:
+        if item_df is None and mcq_df is None:
+            st.warning(
+                "無法生成報告，因為沒有可用的總覽表。請先前往相關分頁生成 overview tables。"
+            )
+        elif api_key:
+            try:
+                if gen_zh:
+                    report = generate_groq_report("zh", item_df, mcq_df, custom_report_prompt)
+                    st.session_state["generated_report_zh"] = report
+                if gen_en:
+                    report = generate_groq_report("en", item_df, mcq_df, custom_report_prompt)
+                    st.session_state["generated_report_en"] = report
+            except Exception as e:
+                st.error(f"❌ 報告生成失敗 | Report generation failed: {str(e)}")
+
+    if st.session_state.get("generated_report_zh"):
+        st.subheader("📄 已生成中文報告 | Generated Chinese Report")
+        st.text_area(
+            "中文報告內容 | Chinese Report Content",
+            value=st.session_state.get("generated_report_zh", ""),
+            height=300,
+            key="generated_report_zh_display",
+        )
+        pdf_bytes = build_report_pdf(st.session_state.get("generated_report_zh", ""))
+        st.download_button(
+            label="📥 下載中文報告 PDF | Download Chinese Report PDF",
+            data=pdf_bytes,
+            file_name="school_report_zh.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+    if st.session_state.get("generated_report_en"):
+        st.subheader("📄 Generated English Report")
+        st.text_area(
+            "English Report Content",
+            value=st.session_state.get("generated_report_en", ""),
+            height=300,
+            key="generated_report_en_display",
+        )
+        pdf_bytes = build_report_pdf(st.session_state.get("generated_report_en", ""))
+        st.download_button(
+            label="📥 Download English Report PDF",
+            data=pdf_bytes,
+            file_name="school_report_en.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )

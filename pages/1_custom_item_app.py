@@ -301,6 +301,7 @@ if not df_item_c.empty:
         return style_map
 
     st.write("📊 **總覽表 (本表跟隨以上設定自動更新) | Overview Table (This table updates automatically based on the above settings)**")
+    st.session_state["custom_item_overview_df"] = df_display.copy()
     st.dataframe(
         df_display.style
             .format({
