@@ -44,6 +44,7 @@ def cache_processed_data(uploaded_file):
     st.session_state['processed_mcq_df'] = extract_mcq_analysis(file_bytes)
     total_df, subject_name, exam_year, attendance_ys, attendance_ds = extract_latest_dse_total_data(file_bytes)
     st.session_state['processed_total_df'] = total_df
+    st.session_state['custom_total_overview_df'] = total_df.copy() if isinstance(total_df, pd.DataFrame) else None
     st.session_state['processed_total_attendance_ys'] = attendance_ys
     st.session_state['processed_total_attendance_ds'] = attendance_ds
     st.session_state['processed_subject_name'] = subject_name
@@ -84,7 +85,7 @@ def dataframe_to_structured_text(df, label):
     return "\n".join(lines)
 
 
-def generate_groq_report(language, item_df, mcq_df, custom_prompt):
+def generate_groq_report(language, total_df, item_df, mcq_df, custom_prompt):
     try:
         api_key = st.secrets["GROQ_API_KEY"]
     except Exception:
@@ -99,17 +100,20 @@ def generate_groq_report(language, item_df, mcq_df, custom_prompt):
         else "You are a professional school data analyst and report writer. Please write clearly, in a structured school-report style, and avoid inventing numbers."
     )
 
+    total_text = dataframe_to_structured_text(total_df, "Total Overview") if total_df is not None else "Total overview table is unavailable."
     item_text = dataframe_to_structured_text(item_df, "Item Overview") if item_df is not None else "Item overview table is unavailable."
     mcq_text = dataframe_to_structured_text(mcq_df, "MCQ Overview") if mcq_df is not None else "MCQ overview table is unavailable."
 
-    if item_df is not None and not item_df.empty and mcq_df is not None and not mcq_df.empty:
+    available_parts = [part for part, df in [("total", total_df), ("item", item_df), ("mcq", mcq_df)] if df is not None and hasattr(df, 'empty') and not df.empty]
+    if len(available_parts) == 3:
         analysis_directive = (
-            "Please write one integrated report synthesizing findings from overlapping/common columns and discussing non-overlapping columns in separate sections. "
-            "Highlight where the two tables reinforce each other and where they provide distinct insights."
+            "Please write one integrated report synthesizing findings from the total, item, and MCQ tables. "
+            "Discuss overlapping data patterns and separate out any distinct findings from each table."
         )
     else:
+        missing = [name for name, df in [("Total", total_df), ("Item", item_df), ("MCQ", mcq_df)] if df is None or (hasattr(df, 'empty') and df.empty)]
         analysis_directive = (
-            "Generate the report using only the available dataframe and explicitly state which part is unavailable or missing. "
+            f"Generate the report using only the available tables and explicitly state that the following tables are unavailable or missing: {', '.join(missing)}. "
             "Do not hallucinate any missing numbers."
         )
 
@@ -118,6 +122,7 @@ def generate_groq_report(language, item_df, mcq_df, custom_prompt):
         f"Language: {'Traditional Chinese' if language == 'zh' else 'English'}.\n\n"
         f"{analysis_directive}\n\n"
         f"Data available:\n"
+        f"{total_text}\n\n"
         f"{item_text}\n\n"
         f"{mcq_text}\n\n"
         "If the data is insufficient, state that clearly and avoid making up values."
@@ -464,14 +469,19 @@ with tab3:
         "This tab reads overview tables from the custom item and MCQ pages through session state and generates reports using Groq."
     )
 
+    total_df = st.session_state.get("custom_total_overview_df")
     item_df = st.session_state.get("custom_item_overview_df")
     mcq_df = st.session_state.get("custom_mcq_overview_df")
 
-    if item_df is None and mcq_df is None:
+    if total_df is None and item_df is None and mcq_df is None:
         st.warning(
-            "請先前往「項目分析」與「多項選擇題分析」分頁生成總覽表。"
-            " | Please first visit Item Analysis and MCQ Analysis pages to build overview tables."
+            "請先前往「總數」、「項目分析」與「多項選擇題分析」分頁生成總覽表。"
+            " | Please first visit Total, Item Analysis and MCQ Analysis pages to build overview tables."
         )
+
+    if total_df is not None:
+        st.subheader("📌 總數分析總覽 Total Overview")
+        st.dataframe(total_df, use_container_width=True, hide_index=True)
 
     if item_df is not None:
         st.subheader("📌 項目分析總覽 Item Overview")
@@ -521,10 +531,10 @@ with tab3:
         elif api_key:
             try:
                 if gen_zh:
-                    report = generate_groq_report("zh", item_df, mcq_df, custom_report_prompt)
+                    report = generate_groq_report("zh", total_df, item_df, mcq_df, custom_report_prompt)
                     st.session_state["generated_report_zh"] = report
                 if gen_en:
-                    report = generate_groq_report("en", item_df, mcq_df, custom_report_prompt)
+                    report = generate_groq_report("en", total_df, item_df, mcq_df, custom_report_prompt)
                     st.session_state["generated_report_en"] = report
             except Exception as e:
                 st.error(f"❌ 報告生成失敗 | Report generation failed: {str(e)}")
