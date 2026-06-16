@@ -4,6 +4,7 @@ import textwrap
 
 import altair as alt
 import groq
+import httpx
 import pandas as pd
 import streamlit as st
 from reportlab.lib.pagesizes import letter
@@ -170,6 +171,66 @@ def build_report_pdf(report_text):
     pdf_data = buffer.getvalue()
     buffer.close()
     return pdf_data
+
+
+def fetch_groq_rate_limit_info(api_key: str, cache_key: str = "groq_rate_limit_info"):
+    """Query Groq API for current rate-limit quota information."""
+    if not api_key:
+        return None
+    if st.session_state.get(cache_key):
+        return st.session_state[cache_key]
+
+    endpoint = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [{"role": "user", "content": "quota check"}],
+        "max_tokens": 1,
+        "temperature": 0.0,
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(endpoint, headers=headers, json=payload)
+        headers = response.headers
+        limit_tokens = headers.get("x-ratelimit-limit-tokens")
+        remaining_tokens = headers.get("x-ratelimit-remaining-tokens")
+        limit_requests = headers.get("x-ratelimit-limit-requests")
+        remaining_requests = headers.get("x-ratelimit-remaining-requests")
+
+        result = {}
+        if limit_tokens is not None and remaining_tokens is not None:
+            try:
+                limit_tokens = int(limit_tokens)
+                remaining_tokens = int(remaining_tokens)
+                result["tokens"] = {
+                    "limit": limit_tokens,
+                    "remaining": remaining_tokens,
+                    "percent": round((remaining_tokens / limit_tokens) * 100, 1) if limit_tokens > 0 else None,
+                }
+            except ValueError:
+                pass
+        if limit_requests is not None and remaining_requests is not None:
+            try:
+                limit_requests = int(limit_requests)
+                remaining_requests = int(remaining_requests)
+                result["requests"] = {
+                    "limit": limit_requests,
+                    "remaining": remaining_requests,
+                    "percent": round((remaining_requests / limit_requests) * 100, 1) if limit_requests > 0 else None,
+                }
+            except ValueError:
+                pass
+
+        if not result:
+            result = {"error": "無法從 Groq API 響應標頭讀取配額資訊。"}
+        st.session_state[cache_key] = result
+        return result
+    except Exception as exc:
+        return {"error": f"查詢 Groq 配額資訊失敗：{str(exc)}"}
 
 
 # ==========================================
@@ -506,6 +567,52 @@ with tab3:
         api_key = st.secrets["GROQ_API_KEY"]
     except Exception:
         api_key = None
+
+    # 顯示 API 使用量資訊
+    if api_key:
+        with st.spinner("正在獲取 API 配額資訊..."):
+            quota_info = fetch_groq_rate_limit_info(api_key)
+        
+        if quota_info and "error" not in quota_info:
+            col_quota1, col_quota2 = st.columns(2)
+            
+            # 顯示 Token 配額
+            if "tokens" in quota_info:
+                tokens_data = quota_info["tokens"]
+                with col_quota1:
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #f0f2f6; padding: 12px; border-radius: 6px; border-left: 4px solid #0066cc;">
+                        <strong style="font-size: 14px;">🔄 Token 配額</strong>
+                        <br><span style="font-size: 20px; font-weight: bold; color: #0066cc;">
+                        {tokens_data['remaining']:,} / {tokens_data['limit']:,}
+                        </span>
+                        <br><span style="font-size: 12px; color: #666;">
+                        剩餘: <strong style="color: #0066cc;">{tokens_data['percent']:.1f}%</strong>
+                        </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+            
+            # 顯示請求配額
+            if "requests" in quota_info:
+                requests_data = quota_info["requests"]
+                with col_quota2:
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #f0f2f6; padding: 12px; border-radius: 6px; border-left: 4px solid #00b359;">
+                        <strong style="font-size: 14px;">📊 請求配額</strong>
+                        <br><span style="font-size: 20px; font-weight: bold; color: #00b359;">
+                        {requests_data['remaining']} / {requests_data['limit']}
+                        </span>
+                        <br><span style="font-size: 12px; color: #666;">
+                        剩餘: <strong style="color: #00b359;">{requests_data['percent']:.1f}%</strong>
+                        </span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
     if not api_key:
         st.error(
