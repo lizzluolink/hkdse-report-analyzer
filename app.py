@@ -131,12 +131,12 @@ def generate_groq_report(language, total_df, item_df, mcq_df, custom_prompt):
 
     client = groq.Client(api_key=api_key)
     response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": user_message},
         ],
-        max_tokens=800,
+        max_tokens=6500,
         temperature=0.3,
     )
 
